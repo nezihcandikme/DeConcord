@@ -118,3 +118,28 @@ def test_compute_pathway_stability_drops_nan_pvalue_rows():
     result = compute_pathway_stability(a, b)
     assert "p3" not in result["merged"].index
     assert result["summary"]["pathways_compared"] == 2
+
+
+def test_compute_pathway_stability_warns_on_low_name_overlap():
+    # Stands in for a real naming-convention mismatch between two
+    # enrichment sources (e.g. an MSigDB-style name in one table, a
+    # g:Profiler-style term name for the same pathway in the other): only
+    # 1 of 10 pathway names happens to match as a literal string.
+    a = pd.DataFrame({
+        "pathway": [f"PATHWAY_{i}" for i in range(10)],
+        "adjusted_p_value": [0.01] * 10,
+    })
+    b = pd.DataFrame({
+        "pathway": ["PATHWAY_0"] + [f"other name {i}" for i in range(9)],
+        "adjusted_p_value": [0.01] * 10,
+    })
+
+    with pytest.warns(UserWarning, match="naming-convention mismatch"):
+        compute_pathway_stability(a, b, name_a="A", name_b="B")
+
+
+def test_compute_pathway_stability_no_warning_on_good_overlap(recwarn):
+    compute_pathway_stability(_enrichment_a(), _enrichment_b(), name_a="A", name_b="B")
+
+    naming_warnings = [w for w in recwarn.list if "naming-convention" in str(w.message)]
+    assert not naming_warnings

@@ -49,7 +49,7 @@ from pathlib import Path
 import pandas as pd
 
 from deconcord.concordance.methods import compute_de_concordance
-from deconcord.io.counts import CountMatrixError
+from deconcord.io.counts import CountMatrixError, sniff_delimiter
 from deconcord.pathway_analysis.gmt import load_gmt
 from deconcord.pipeline import run_analysis
 
@@ -166,8 +166,13 @@ def _run(argv: list[str]) -> int:
         else:
             # No explicit background given: fall back to every gene in the
             # count matrix, which is the honest "everything that could have
-            # been tested" universe for this run.
-            background_genes = set(pd.read_csv(args.counts, index_col=0).index)
+            # been tested" universe for this run. Sniffed the same way
+            # load_count_matrix (called inside run_analysis, below) reads
+            # args.counts itself -- this needs to agree with that, or a
+            # tab-separated counts file would parse fine in the actual
+            # pipeline run but silently produce a single-column, useless
+            # background gene set here.
+            background_genes = set(pd.read_csv(args.counts, index_col=0, sep=sniff_delimiter(args.counts)).index)
 
     results = run_analysis(
         args.counts,

@@ -10,7 +10,7 @@ Most RNA-seq workflows report the significant genes or pathways from one analysi
 
 DEConcord isn't a DESeq2/edgeR replacement, and running its own differential expression is a small, secondary part of it. It takes DE result tables (from DESeq2, edgeR, or anything with a gene ID, a log fold change, and a p-value) and reports how much their conclusions actually agree, and where they don't.
 
-**Status**: early, pre-1.0 (v0.18.0), under active development. Method concordance, threshold sensitivity, pathway stability, and resampling stability (including per-gene direction and rank stability) are implemented; method concordance is checked against real data (see [Validation](#validation)).
+**Status**: early, pre-1.0 (v0.19.0), under active development. Method concordance, threshold sensitivity, pathway stability, and resampling stability (including per-gene direction and rank stability) are implemented; method concordance is checked against real data (see [Validation](#validation)).
 
 ## Quick start
 

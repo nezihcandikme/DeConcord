@@ -9,6 +9,45 @@ This file is user-facing: what changed and what it means for you. For the
 reasoning behind each decision, including rejected alternatives, see
 [`DEVLOG.md`](DEVLOG.md).
 
+## [0.19.0] — 2026-08-23
+
+### Changed
+- `validate_counts`/`load_count_matrix` no longer require whole-number
+  counts. Salmon/kallisto/RSEM-style "estimated counts" (legitimately
+  fractional, since multi-mapping reads get split across the transcripts
+  they map to) are now accepted alongside featureCounts/htseq-count's
+  integer output. Non-negative and finite is still required; a
+  non-numeric column and an infinite value are both still rejected, now
+  with their own specific error types (`NonNumericCountsError`,
+  `NonFiniteCountsError`). `check_all_integer` is kept as a standalone,
+  stricter check for a caller who wants to require whole numbers.
+- `load_count_matrix` auto-detects comma vs. tab delimiter by default
+  (new `sniff_delimiter`, also a `sep` parameter to override it). A
+  tab-separated file — the shape most raw bulk RNA-seq quantification
+  tools (featureCounts, htseq-count) actually export — used to silently
+  collapse into one unparsed column instead of failing or loading
+  correctly.
+
+### Added
+- `validate_counts` now rejects an empty (zero-row or zero-column) count
+  matrix and a duplicated sample column name, both with a specific error
+  naming the problem. Previously both passed validation silently (every
+  check trivially passes on an empty axis; only the gene-ID side of the
+  uniqueness check existed, not the sample side).
+- `compute_de_concordance`/`compute_pathway_stability` now emit a
+  `UserWarning` when the matched gene/pathway count is well below either
+  input table's own size — usually a sign of an ID-format mismatch
+  between the two tables (an Ensembl ID version suffix present in one
+  table and not the other, an Ensembl ID vs. a gene symbol, a naming
+  convention difference between two pathway enrichment sources) rather
+  than a real biological difference in what was tested. A total mismatch
+  (zero overlap) already raised a clear error; this covers the partial
+  case, which previously just looked like a slightly lower Jaccard index
+  with no indication anything was off.
+- `plot_volcano` now validates its input (required columns, non-empty)
+  the same way `plot_pca`/`plot_pathway_enrichment` already did, instead
+  of raising a bare `KeyError` on a missing column.
+
 ## [0.18.0] — 2026-08-19
 
 ### Added

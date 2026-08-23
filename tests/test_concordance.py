@@ -158,3 +158,35 @@ def test_compute_de_concordance_invalid_alpha_raises():
 
     with pytest.raises(ValueError, match="alpha"):
         compute_de_concordance(_method_a(), _method_b(), alpha=1.5)
+
+
+def test_compute_de_concordance_warns_on_low_id_overlap():
+    # Simulates a real, easy-to-hit mistake: the same 10 genes, but one
+    # table's IDs carry an Ensembl-style version suffix and the other's
+    # don't (e.g. one tool's annotation build vs. another's). Only 2 of
+    # the 10 genes happen to match as literal strings -- well below the
+    # 50% threshold -- which should warn rather than stay silent, since a
+    # caller could easily misread the resulting low Jaccard index as a
+    # real disagreement between methods instead of an ID-format mismatch.
+    a = pd.DataFrame(
+        {"log_fold_change": [1.0] * 10, "adjusted_p_value": [0.01] * 10},
+        index=[f"ENSG{i:03d}.1" for i in range(10)],
+    )
+    b = pd.DataFrame(
+        {"log_fold_change": [1.0] * 10, "adjusted_p_value": [0.01] * 10},
+        # Only the first two rows use the same (unversioned) ID as `a`;
+        # the rest use a disjoint ID space, standing in for "the same
+        # underlying genes, named differently."
+        index=[f"ENSG{i:03d}.1" for i in range(2)] + [f"OTHERID{i}" for i in range(8)],
+    )
+
+    with pytest.warns(UserWarning, match="gene ID conventions"):
+        compute_de_concordance(a, b, name_a="A", name_b="B")
+
+
+def test_compute_de_concordance_no_warning_on_good_overlap(recwarn):
+    # The common, healthy case (matching IDs) shouldn't warn at all.
+    compute_de_concordance(_method_a(), _method_b(), name_a="A", name_b="B")
+
+    id_mismatch_warnings = [w for w in recwarn.list if "gene ID conventions" in str(w.message)]
+    assert not id_mismatch_warnings

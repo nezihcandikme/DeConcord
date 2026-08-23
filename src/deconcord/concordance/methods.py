@@ -21,6 +21,8 @@ CSV, which is what this module was actually validated against.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
@@ -104,6 +106,17 @@ def compute_de_concordance(
         gene has a non-missing log fold change and p-value in both tables
         (nothing to compare -- usually a sign that the two tables weren't
         run on the same gene set at all).
+
+    Warns
+    -----
+    UserWarning
+        If the matched gene count is less than half of the smaller table's
+        own gene count -- a much more likely sign of an ID-format mismatch
+        between the two tables (Ensembl IDs with vs. without a version
+        suffix, Ensembl IDs vs. gene symbols) than of genuinely different
+        genes being tested. Not raised as an error, since a real, large
+        biological difference in what was tested is possible too -- just
+        surfaced loudly enough to check before trusting the numbers below.
     """
     if not (0 < alpha <= 1):
         raise ValueError(f"alpha must be in (0, 1]; got {alpha}.")
@@ -125,6 +138,35 @@ def compute_de_concordance(
     b.columns = ["lfc", "padj"]
 
     merged = a.join(b, how="inner", lsuffix=f"_{name_a}", rsuffix=f"_{name_b}")
+
+    # A real ID-format mismatch between the two tables (Ensembl IDs with a
+    # version suffix in one and without in the other, e.g. "ENSG...1" vs
+    # "ENSG...", or Ensembl IDs in one and gene symbols in the other) joins
+    # on the index just like a real biological difference would: silently,
+    # with no error, just a smaller merged table. A *total* mismatch (zero
+    # overlap) is already caught below, but a *partial* one isn't -- it
+    # just looks like a slightly lower genes_compared/jaccard_index, which
+    # is easy to misread as a real finding about the two methods rather
+    # than a data-formatting problem. Two well-annotated tools run on the
+    # same real dataset routinely match on 90%+ of the smaller table's
+    # genes (see the README's Validation numbers); a match well below that
+    # is a much stronger signal of an ID mismatch than of genuine
+    # biological non-overlap, so it's worth a loud nudge rather than
+    # silence.
+    smaller_size = min(len(a), len(b))
+    if 0 < len(merged) < 0.5 * smaller_size:
+        warnings.warn(
+            f"Only {len(merged)} of {smaller_size} gene IDs in the smaller "
+            f"table matched between '{name_a}' ({len(a)} genes) and "
+            f"'{name_b}' ({len(b)} genes). This usually means the two "
+            "tables use different gene ID conventions (e.g. Ensembl IDs "
+            "with vs. without a version suffix, or Ensembl IDs vs. gene "
+            "symbols) rather than a real biological difference in what was "
+            "tested -- spot-check a few IDs from each table before "
+            "trusting the concordance numbers below.",
+            stacklevel=2,
+        )
+
     lfc_a_col, padj_a_col = f"lfc_{name_a}", f"padj_{name_a}"
     lfc_b_col, padj_b_col = f"lfc_{name_b}", f"padj_{name_b}"
     merged = merged.dropna(subset=[lfc_a_col, padj_a_col, lfc_b_col, padj_b_col])

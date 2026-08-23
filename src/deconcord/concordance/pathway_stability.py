@@ -26,6 +26,8 @@ well-defined meaning here.
 
 from __future__ import annotations
 
+import warnings
+
 import pandas as pd
 
 
@@ -87,6 +89,15 @@ def compute_pathway_stability(
         If ``alpha`` is not in (0, 1], either table has a duplicate
         pathway name, a required column is missing from either table, or
         no pathway was tested in both tables.
+
+    Warns
+    -----
+    UserWarning
+        If the matched pathway count is less than half of the smaller
+        table's own pathway count — this can be a real result (different
+        gene-set collections legitimately share few names), but it's also
+        exactly what a naming-convention mismatch between sources looks
+        like, so it's surfaced rather than left silent.
     """
     if not (0 < alpha <= 1):
         raise ValueError(f"alpha must be in (0, 1]; got {alpha}.")
@@ -106,6 +117,32 @@ def compute_pathway_stability(
     b = enrichment_b.set_index(pathway_col_b)[[pvalue_col_b]].rename(columns={pvalue_col_b: "padj"})
 
     merged = a.join(b, how="inner", lsuffix=f"_{name_a}", rsuffix=f"_{name_b}")
+
+    # Same idea as compute_de_concordance's gene-ID overlap check: a low
+    # matched-pathway count can be a real, legitimate result (two truly
+    # different gene-set collections, e.g. a narrow in-house GMT file
+    # against g:Profiler's much broader databases, genuinely don't share
+    # many pathway names) rather than a mistake -- unlike the gene-ID
+    # case, there's no "should be 90%+" baseline to lean on here. Still
+    # worth a nudge rather than silence, since the *other* common cause
+    # (same underlying pathway, different naming convention between
+    # sources -- "HALLMARK_TNFA_SIGNALING_VIA_NFKB" vs. "TNF-alpha
+    # signaling via NF-kB") is a data problem, not a finding, and looks
+    # identical to a genuine low-overlap result unless someone checks.
+    smaller_size = min(len(a), len(b))
+    if 0 < len(merged) < 0.5 * smaller_size:
+        warnings.warn(
+            f"Only {len(merged)} of {smaller_size} pathway names in the "
+            f"smaller table matched between '{name_a}' ({len(a)} pathways) "
+            f"and '{name_b}' ({len(b)} pathways). This can be a genuine "
+            "result if the two tables come from different gene-set "
+            "collections, but it's also exactly what a naming-convention "
+            "mismatch between sources looks like (e.g. a MSigDB-style name "
+            "vs. a g:Profiler term name for the same pathway) -- spot-check "
+            "a few names from each table before trusting the numbers below.",
+            stacklevel=2,
+        )
+
     padj_a_col, padj_b_col = f"padj_{name_a}", f"padj_{name_b}"
     merged = merged.dropna(subset=[padj_a_col, padj_b_col])
 

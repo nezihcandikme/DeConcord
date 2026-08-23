@@ -4,18 +4,53 @@ import pytest
 
 from deconcord.io.counts import (
     CountMatrixError,
+    NonFiniteCountsError,
+    NonNumericCountsError,
+    NonUniqueColumnsError,
     NonUniqueIndexError,
+    check_all_finite,
     check_all_integer,
+    check_numeric_dtype,
+    check_unique_columns,
     check_unique_index,
+    sniff_delimiter,
     validate_counts,
     load_count_matrix,
 )
 
 
 def test_validate_counts_invalid_raises():
-    df = pd.DataFrame({"sample_A": [1.5, 2, 3]})
+    # A non-numeric column (e.g. a stray text value) is the thing
+    # validate_counts should still reject outright -- fractional numeric
+    # values, on the other hand, are now legitimate (see
+    # test_validate_counts_fractional_counts_valid below).
+    df = pd.DataFrame({"sample_A": ["not", "a", "count"]})
 
     with pytest.raises(CountMatrixError):
+        validate_counts(df)
+
+
+def test_validate_counts_fractional_counts_valid():
+    # salmon/kallisto/RSEM "estimated counts" are legitimately fractional
+    # (multi-mapping reads get split across the transcripts they map to),
+    # not whole numbers -- these are still real counts and validate_counts
+    # must accept them, not just featureCounts/htseq-count's integer output.
+    df = pd.DataFrame({"sample_A": [12.4, 0.0, 340.7], "sample_B": [10.9, 1.0, 355.2]})
+
+    validate_counts(df)
+
+
+def test_validate_counts_non_numeric_column_raises():
+    df = pd.DataFrame({"sample_A": ["x", "y", "z"]})
+
+    with pytest.raises(NonNumericCountsError):
+        validate_counts(df)
+
+
+def test_validate_counts_infinite_value_raises_specific_error():
+    df = pd.DataFrame({"sample_A": [1.0, np.inf, 3.0]})
+
+    with pytest.raises(NonFiniteCountsError):
         validate_counts(df)
 
 
@@ -31,17 +66,73 @@ def test_check_all_integer_invalid():
     assert check_all_integer(df) is False
 
 
+def test_check_numeric_dtype_true_for_fractional():
+    # check_numeric_dtype (what validate_counts actually enforces) is more
+    # permissive than check_all_integer on purpose.
+    df = pd.DataFrame({"sample_A": [1.5, 2.0, 3.25]})
+
+    assert check_numeric_dtype(df) is True
+
+
+def test_check_numeric_dtype_false_for_text():
+    df = pd.DataFrame({"sample_A": ["a", "b", "c"]})
+
+    assert check_numeric_dtype(df) is False
+
+
+def test_check_all_finite_true_for_normal_values():
+    df = pd.DataFrame({"sample_A": [1.0, 2.0, 3.0]})
+
+    assert check_all_finite(df) is True
+
+
+def test_check_all_finite_false_for_inf():
+    df = pd.DataFrame({"sample_A": [1.0, np.inf, 3.0]})
+
+    assert check_all_finite(df) is False
+
+
+def test_check_all_finite_ignores_nan():
+    # NaN is check_no_missing_values's job, not check_all_finite's -- a
+    # missing value shouldn't also trip the "contains infinity" error.
+    df = pd.DataFrame({"sample_A": [1.0, np.nan, 3.0]})
+
+    assert check_all_finite(df) is True
+
+
 def test_validate_counts_valid_does_not_raise():
     df = pd.DataFrame({"sample_A": [1, 2, 3]})
 
     validate_counts(df)
 
 
-def test_validate_counts_multiple_errors_raises():
+def test_validate_counts_negative_fractional_value_raises():
+    # -1.5 is invalid for a different reason now than it used to be:
+    # fractional is fine (see test_validate_counts_fractional_counts_valid),
+    # negative is what actually trips this one.
     df = pd.DataFrame({"sample_A": [-1.5, 2, 3]})
 
     with pytest.raises(CountMatrixError):
         validate_counts(df)
+
+
+def test_validate_counts_multiple_errors_combined_in_message():
+    # Two independent problems at once (a non-numeric column and a
+    # duplicate gene ID) should both be reported together in one raised
+    # error, not just the first one found -- validate_counts collects
+    # every problem before raising, on purpose, so a single failed run
+    # tells you everything that's wrong instead of one error at a time.
+    df = pd.DataFrame(
+        {"sample_A": ["x", "y"], "sample_B": [1, 2]},
+        index=["gene1", "gene1"],
+    )
+
+    with pytest.raises(CountMatrixError) as exc_info:
+        validate_counts(df)
+
+    message = str(exc_info.value)
+    assert "numeric" in message
+    assert "unique" in message.lower() or "index" in message.lower()
 
 
 def test_load_count_matrix_invalid_raises():
@@ -102,14 +193,59 @@ def test_validate_counts_duplicate_gene_ids_raises():
 
 
 def test_validate_counts_infinite_values_raises():
-    # An infinite value can't be an integer count, so this is already
-    # rejected today -- but via the generic "non-integer" path, since
-    # float('inf') gives the column a float dtype. Pinned down explicitly
-    # here so a future refactor of check_all_integer can't silently let
-    # inf slip through as if it were a valid float count.
+    # An infinite value isn't a real count under either the strict
+    # (check_all_integer) or the permissive (check_numeric_dtype) reading
+    # -- see check_all_finite and test_validate_counts_infinite_value_raises_specific_error
+    # for the explicit, named-exception version of this same check.
     df = pd.DataFrame({"sample_A": [1.0, np.inf, 3.0]})
 
     with pytest.raises(CountMatrixError):
+        validate_counts(df)
+
+
+def test_check_unique_columns_true_for_unique():
+    df = pd.DataFrame({"sample_A": [1, 2, 3], "sample_B": [4, 5, 6]})
+    assert check_unique_columns(df) is True
+
+
+def test_check_unique_columns_false_for_duplicates():
+    df = pd.DataFrame([[1, 4], [2, 5], [3, 6]], columns=["sample_A", "sample_A"])
+    assert check_unique_columns(df) is False
+
+
+def test_validate_counts_duplicate_sample_columns_raises():
+    # Two columns sharing a sample name is a real, easy-to-hit mistake with
+    # real data (a copy-pasted header, two lanes accidentally merged under
+    # one label) -- df[["sample_A"]] for a duplicated name silently returns
+    # both columns instead of one, which downstream group-mean/variance
+    # calculations in the DE functions would average across without any
+    # sign anything was wrong. validate_counts must catch it, mirroring the
+    # existing gene-ID-side check (check_unique_index).
+    df = pd.DataFrame([[1, 4], [2, 5], [3, 6]], columns=["sample_A", "sample_A"])
+
+    with pytest.raises(NonUniqueColumnsError):
+        validate_counts(df)
+
+
+def test_validate_counts_empty_rows_raises():
+    # Zero genes (rows) with real sample columns -- every other check in
+    # validate_counts passes vacuously on an empty axis, so this needs its
+    # own explicit guard rather than relying on the rest to catch it.
+    df = pd.DataFrame({"sample_A": [], "sample_B": []}, dtype=int)
+
+    with pytest.raises(CountMatrixError, match="no genes"):
+        validate_counts(df)
+
+
+def test_validate_counts_empty_columns_raises():
+    # Zero sample columns -- the shape a real featureCounts/htseq-count
+    # file produces when it's read with the wrong delimiter (tab-separated
+    # data parsed as CSV collapses into one unparsed index column and zero
+    # data columns). Confirmed against a real-shaped fixture in the past;
+    # this pins down the fix so it can't silently regress.
+    df = pd.DataFrame(index=["gene1", "gene2", "gene3"])
+
+    with pytest.raises(CountMatrixError, match="no samples"):
         validate_counts(df)
 
 
@@ -121,3 +257,54 @@ def test_validate_counts_all_zero_column_is_valid():
     df = pd.DataFrame({"sample_A": [0, 0, 0], "sample_B": [1, 2, 3]})
 
     validate_counts(df)
+
+
+def test_sniff_delimiter_detects_comma(tmp_path):
+    path = tmp_path / "counts.csv"
+    path.write_text("gene_id,sample_A,sample_B\nENSG001,10,12\n")
+
+    assert sniff_delimiter(str(path)) == ","
+
+
+def test_sniff_delimiter_detects_tab(tmp_path):
+    # The shape a real featureCounts/htseq-count export actually has.
+    path = tmp_path / "counts.txt"
+    path.write_text("gene_id\tsample_A\tsample_B\nENSG001\t10\t12\n")
+
+    assert sniff_delimiter(str(path)) == "\t"
+
+
+def test_sniff_delimiter_handles_gzip(tmp_path):
+    import gzip
+
+    path = tmp_path / "counts.tsv.gz"
+    with gzip.open(path, "wt") as f:
+        f.write("gene_id\tsample_A\tsample_B\nENSG001\t10\t12\n")
+
+    assert sniff_delimiter(str(path)) == "\t"
+
+
+def test_load_count_matrix_auto_detects_tab_separated_file(tmp_path):
+    # This is the exact real-world shape that used to load as a single,
+    # useless column: a featureCounts/htseq-count-style tab-separated
+    # export, loaded with no explicit sep given.
+    path = tmp_path / "featurecounts_style.txt"
+    path.write_text(
+        "Geneid\tsample_A\tsample_B\n"
+        "ENSG001\t12\t15\n"
+        "ENSG002\t0\t3\n"
+    )
+
+    df = load_count_matrix(str(path))
+
+    assert df.shape == (2, 2)
+    assert list(df.columns) == ["sample_A", "sample_B"]
+
+
+def test_load_count_matrix_explicit_sep_overrides_sniff(tmp_path):
+    path = tmp_path / "counts.txt"
+    path.write_text("gene_id;sample_A;sample_B\nENSG001;10;12\n")
+
+    df = load_count_matrix(str(path), sep=";")
+
+    assert df.shape == (1, 2)

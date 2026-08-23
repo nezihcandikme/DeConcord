@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deconcord"
-version = "0.18.0"
+version = "0.19.0"
 description = "Robustness and concordance analysis for RNA-seq differential expression -- given DE result tables from DESeq2, edgeR, or any other tool, computes method concordance (significant-gene overlap, directional and effect-size agreement, concordant/discordant genes). Also ships the RNA-seq pipeline (validation, QC, normalization, exploratory/covariate-adjusted DE, annotation, pathway enrichment, visualization) that generates the DE tables it compares."
 readme = "README.md"
 requires-python = ">=3.9"

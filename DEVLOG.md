@@ -573,3 +573,31 @@ Written up in `benchmarks/README.md` (full tables and per-regime interpretation,
 `pytest -q`: 247 passed. `ruff check src/ tests/ benchmarks/ examples/`: clean. No `src/deconcord/` changes, no version bump -- this entry documents `benchmarks/` results and their writeup only.
 
 The stress-test benchmark suite, as scoped in the roadmap (a third DE tool, three harder data regimes), is done. What comes next hasn't been decided.
+
+---
+
+## Aug 23: real-data compatibility pass across src/deconcord/
+
+Went through every module in `src/deconcord/` end to end today, not chasing a specific bug report but checking whether the package actually holds up against realistic RNA-seq data shapes rather than just its own test fixtures, ahead of using it against real data at Firalis. Ran the full test suite and ruff first as a baseline (both clean), then read every file, and for the input-handling layer specifically, fed it data shaped like what real quantification tools actually produce instead of guessing at failure modes from reading code alone.
+
+Most of it held up well. The statistical core (concordance, DE, resampling stability) had no correctness bugs, and the existing comments/docstrings were already thorough enough that there wasn't much worth adding without padding for its own sake. Four real things came out of the pass, in roughly increasing order of how much they mattered:
+
+**`plot_volcano` was the one plot function that didn't validate its input.** `plot_pca`/`plot_pathway_enrichment` both check for missing columns and raise a specific `ValueError`; `plot_volcano` let a raw `KeyError` through instead. Fixed to match, tested.
+
+**`validate_counts` passed an empty matrix.** Fed it a tab-separated file loaded with the CSV reader -- the exact mistake someone would make loading real featureCounts output -- and it silently produced a zero-column DataFrame that every check in `validate_counts` passes vacuously on. Added an explicit zero-row/zero-column check, and, mirroring the gene-ID-side uniqueness check that already existed, a check for duplicate sample column names (previously unchecked on that side too -- a duplicated column name means `df[[name]]` returns two columns instead of one, and the DE functions' group means/variances would average across both without any sign anything was wrong).
+
+**Two real-data compatibility gaps, each confirmed by actually running a realistic input before touching any code.** `validate_counts` required literal integer dtype, which rejects salmon/kallisto/RSEM's legitimately fractional "estimated counts" (multi-mapping reads split across the transcripts they map to) -- confirmed with a synthetic table of values like `12.4`, `340.7`. And `load_count_matrix` hardcoded comma-separated parsing, so a real featureCounts/htseq-count-style tab-separated export collapsed into one unparsed column instead of loading correctly -- also confirmed directly. Relaxed the dtype check to numeric + finite + non-negative (kept `check_all_integer` around as a stricter standalone check for anyone who wants to require whole numbers), and added `sniff_delimiter` (comma vs. tab, gzip-aware) as `load_count_matrix`'s new default, overridable via an explicit `sep`.
+
+**One gap in `compute_de_concordance`/`compute_pathway_stability` that adds a warning, not new behavior.** Both functions inner-join two tables on gene ID or pathway name. A *total* mismatch already raised a clear error; a *partial* one (an Ensembl ID version suffix present in one table and not the other, say) didn't -- it just silently shrank the compared set and looked like a slightly lower Jaccard index, exactly the kind of thing that's easy to misread as a real finding about two methods instead of a data-formatting problem. Added a `UserWarning` when the matched count is under half of the smaller table's own size. Deliberately not an error: a real, large biological difference in what was tested is possible too, and that case shouldn't be blocked, just flagged for a second look.
+
+Fixing `check_nonnegative_counts` turned into a small bug of its own along the way. Once `validate_counts` could accept a non-numeric column without immediately raising (every error gets collected before raising, not stopped at the first one), `check_nonnegative_counts`'s `(df >= 0)` blew up with a raw `TypeError` on a string column instead of contributing a clean error to the batch. Restricted it to numeric columns via the same `select_dtypes` guard `check_all_finite` already used, so it fails the way every other check in this file does instead of crashing the whole validation pass.
+
+Decisions rejected along the way:
+
+- **A heuristic warning for "this data looks already normalized," alongside the fractional-counts relaxation.** Tempting, since relaxing the integer check also means DEConcord no longer rejects a CPM table fed in by mistake. Rejected for this round -- "looks pre-normalized" is a fuzzier problem than the concrete one that was actually confirmed (salmon/kallisto-style counts specifically), and building it now would mean solving a problem nobody's hit yet instead of the one that was.
+- **Auto-stripping featureCounts' leading annotation columns (`Chr`/`Start`/`End`/`Strand`/`Length`) as part of the delimiter fix.** Checked what actually happens once the delimiter is fixed: a raw featureCounts file now parses into real columns instead of garbage, and `validate_counts` correctly names `Chr` as the problem instead of failing somewhere unhelpful downstream. That's the right amount of fixing for this round -- the delimiter was a bug; dropping metadata columns DEConcord was never asked to guess about is a different feature.
+- **Making the gene-ID-mismatch check an error instead of a warning.** A large but real biological non-overlap between two DE tables is a legitimate result DEConcord shouldn't block; the point is to make a likely data problem loud, not to assume it's always one.
+
+Full pytest suite: 247 to 272 (25 new tests, plus a couple of existing ones -- `test_validate_counts_invalid_raises`, `test_validate_counts_multiple_errors_raises` -- rewritten where the fractional-counts relaxation changed what they were actually testing, since a value they used to assert was invalid is now legitimate input). `ruff check src/ tests/ benchmarks/ examples/`: clean.
+
+Version bump: 0.18.0 to 0.19.0.

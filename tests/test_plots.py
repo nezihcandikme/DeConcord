@@ -34,6 +34,28 @@ def test_plot_volcano_handles_zero_adjusted_pvalue():
     assert np.isfinite(fig.axes[0].collections[1].get_offsets()[:, 1]).all()
 
 
+def test_plot_volcano_missing_column_raises():
+    # plot_pca/plot_pathway_enrichment both validate required columns and
+    # raise a specific ValueError; plot_volcano didn't, so a mistyped
+    # column name used to surface as a bare KeyError from inside the
+    # scatter call instead of a message naming the actual problem.
+    results_df = pd.DataFrame({
+        "log_fold_change": [3.0, 0.2],
+        "adjusted_p_value": [0.01, 0.6],
+        # "significant" column missing on purpose
+    }, index=["gene1", "gene2"])
+
+    with pytest.raises(ValueError, match="significant"):
+        plot_volcano(results_df)
+
+
+def test_plot_volcano_empty_raises():
+    results_df = pd.DataFrame(columns=["log_fold_change", "adjusted_p_value", "significant"])
+
+    with pytest.raises(ValueError, match="empty"):
+        plot_volcano(results_df)
+
+
 def test_plot_pca_returns_figure():
     df = pd.DataFrame({
         "sample1": [10, 5, 2, 8], "sample2": [12, 6, 3, 9],

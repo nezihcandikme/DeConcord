@@ -26,7 +26,26 @@ def plot_volcano(results_df: pd.DataFrame) -> plt.Figure:
     Returns
     -------
     plt.Figure
+
+    Raises
+    ------
+    ValueError
+        If ``results_df`` is empty, or missing any of the three required
+        columns — matches the validation ``plot_pca``/``plot_pathway_enrichment``
+        already do, so a mistyped column name or an accidentally-empty
+        results table fails with a specific message here instead of a bare
+        ``KeyError`` from inside matplotlib's plotting call.
     """
+    required_cols = ["log_fold_change", "adjusted_p_value", "significant"]
+    missing = [c for c in required_cols if c not in results_df.columns]
+    if missing:
+        raise ValueError(
+            f"results_df is missing column(s) {missing}. "
+            f"Found columns: {list(results_df.columns)}."
+        )
+    if results_df.empty:
+        raise ValueError("results_df is empty — nothing to plot.")
+
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.axhline(y=-np.log10(0.05), color="black", linestyle="--", label="Significance threshold (0.05)")
     ax.set_title("Volcano Plot")
