@@ -24,6 +24,8 @@ you happened to pick.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pandas as pd
 
 from deconcord.concordance.methods import compute_de_concordance
@@ -32,7 +34,11 @@ from deconcord.concordance.methods import compute_de_concordance
 def compute_threshold_sensitivity(
     results_a: pd.DataFrame,
     results_b: pd.DataFrame,
-    alphas: list[float] = (0.01, 0.05, 0.1),
+    # Sequence, not list: the default is a tuple on purpose (an immutable
+    # default avoids the classic mutable-default-argument footgun), and the
+    # body immediately does alphas = list(alphas), so any ordered iterable
+    # of floats -- tuple, list, or otherwise -- is genuinely accepted here.
+    alphas: Sequence[float] = (0.01, 0.05, 0.1),
     name_a: str = "method_a",
     name_b: str = "method_b",
     lfc_col_a: str = "log_fold_change",

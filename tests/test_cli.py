@@ -358,3 +358,66 @@ def test_cli_empty_group_raises_via_exit_code():
     ])
 
     assert exit_code == 1
+
+
+def test_cli_explicit_background_used_instead_of_full_count_matrix(tmp_path):
+    # --background lets a caller supply a narrower gene universe than "every
+    # gene in the count matrix" (e.g. only genes that passed some other
+    # filter upstream) -- exercised here with a single-gene background so the
+    # written pathway_enrichment.csv's overlap_count is provably bounded by
+    # it, not by the full 4-gene count matrix.
+    out_dir = tmp_path / "out"
+
+    main([
+        "tests/fixtures/cli_counts.csv",
+        "--group1", "sample1,sample2",
+        "--group2", "sample3,sample4",
+        "--gmt", "tests/fixtures/sample_gene_sets.gmt",
+        "--background", "gene1",
+        "--no-plots",
+        "--out", str(out_dir),
+    ])
+
+    enrichment = pd.read_csv(out_dir / "tables" / "pathway_enrichment.csv")
+    assert (enrichment["overlap_count"] <= 1).all()
+
+
+def test_cli_metadata_without_sample_column_uses_first_column_as_index(tmp_path):
+    # Real metadata exports don't always name the sample-ID column "sample"
+    # -- the CLI falls back to treating the first column as the index either
+    # way, which this pins down explicitly rather than only ever testing the
+    # "sample"-named case.
+    out_dir = tmp_path / "out"
+    metadata_path = tmp_path / "metadata.csv"
+    metadata_path.write_text(
+        "sample_name,batch\nsample1,batch_A\nsample2,batch_B\nsample3,batch_A\nsample4,batch_B\n"
+    )
+
+    exit_code = main([
+        "tests/fixtures/cli_counts.csv",
+        "--group1", "sample1,sample2",
+        "--group2", "sample3,sample4",
+        "--metadata", str(metadata_path),
+        "--covariates", "batch",
+        "--no-plots",
+        "--out", str(out_dir),
+    ])
+
+    assert exit_code == 0
+    assert (out_dir / "tables" / "differential_expression.csv").exists()
+
+
+def test_installed_versions_reports_missing_package(monkeypatch):
+    from deconcord.cli import _installed_versions, PackageNotFoundError
+
+    def fake_version(pkg):
+        if pkg == "scikit-learn":
+            raise PackageNotFoundError(pkg)
+        return "1.0.0"
+
+    monkeypatch.setattr("deconcord.cli.version", fake_version)
+
+    versions = _installed_versions()
+
+    assert versions["scikit-learn"] == "not installed"
+    assert versions["pandas"] == "1.0.0"

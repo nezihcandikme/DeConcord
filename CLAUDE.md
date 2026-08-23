@@ -11,16 +11,18 @@ The core question (concordance/threshold sensitivity/pathway stability/resamplin
 ## Commands
 
 ```bash
-pip install -e ".[dev]"                              # dev setup: pytest + ruff
+pip install -e ".[dev]"                              # dev setup: pytest + pytest-cov + ruff + mypy
 pytest -q                                             # run all tests
 pytest tests/test_concordance.py -q                   # run one test file
 pytest tests/test_concordance.py::test_name -q        # run a single test
+pytest --cov=deconcord --cov-report=term-missing -q  # run tests with a coverage report
 ruff check src/ tests/ benchmarks/ examples/           # lint (required, CI-gated)
 ruff check src/ tests/ benchmarks/ examples/ --fix     # auto-fix (mostly import ordering)
+mypy src/deconcord --ignore-missing-imports           # type check (required, CI-gated)
 python examples/quickstart.py                          # full workflow demo, no network/R required
 ```
 
-Ruff is scoped to `E9, F, FA` (syntax errors, pyflakes-equivalent, and type-hint py-version compatibility) rather than opinionated style — see `pyproject.toml`'s `[tool.ruff.lint]` comment. CI (`.github/workflows/tests.yml`) runs lint, `pytest -v` across Python 3.9-3.12, then a CLI smoke test against a real fixture.
+Ruff is scoped to `E9, F, FA` (syntax errors, pyflakes-equivalent, and type-hint py-version compatibility) rather than opinionated style — see `pyproject.toml`'s `[tool.ruff.lint]` comment. CI (`.github/workflows/tests.yml`) runs lint, a `mypy` type check, `pytest -v` across Python 3.9-3.12, then a CLI smoke test against a real fixture. The package ships a `py.typed` marker (PEP 561), so its type hints are meant to be relied on by downstream callers' own type checkers, not just treated as documentation.
 
 ## Architecture
 

@@ -32,6 +32,20 @@ def test_load_gmt_line_missing_genes_raises(tmp_path):
         load_gmt(str(gmt_file))
 
 
+def test_load_gmt_blank_gene_fields_raises(tmp_path):
+    # Distinct from test_load_gmt_line_missing_genes_raises above: that one
+    # has too few tab-separated fields entirely (caught earlier, by the
+    # "at least 3 fields" check). This line has enough fields -- the shape
+    # a spreadsheet export with trailing empty cells produces -- but every
+    # gene slot is an empty string, so it's the same practical problem
+    # (no usable genes) caught by the later, separate `if not genes` check.
+    gmt_file = tmp_path / "blank_genes.gmt"
+    gmt_file.write_text("PATHWAY_A\tsome description\t\t\n")
+
+    with pytest.raises(ValueError, match="has no genes"):
+        load_gmt(str(gmt_file))
+
+
 def test_load_gmt_duplicate_name_raises(tmp_path):
     gmt_file = tmp_path / "duplicate.gmt"
     gmt_file.write_text(

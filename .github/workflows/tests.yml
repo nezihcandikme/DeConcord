@@ -30,6 +30,9 @@ jobs:
       - name: Lint
         run: ruff check src/ tests/ benchmarks/ examples/
 
+      - name: Type check
+        run: mypy src/deconcord --ignore-missing-imports
+
       - name: Run tests
         run: pytest -v
 

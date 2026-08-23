@@ -140,7 +140,7 @@ def check_unique_columns(df: pd.DataFrame) -> bool:
 
 def check_nonnegative_counts(df: pd.DataFrame) -> bool:
     """
-    True if every numeric value in the DataFrame is >= 0.
+    True if every non-missing numeric value in the DataFrame is >= 0.
 
     Restricted to numeric columns (same ``select_dtypes`` guard
     ``check_all_finite`` uses) so this doesn't itself crash with a raw
@@ -149,11 +149,19 @@ def check_nonnegative_counts(df: pd.DataFrame) -> bool:
     this one, so it has to survive being called on data that already
     failed a different check (e.g. a text column) without blowing up
     before the *real* problem (non-numeric data) gets reported.
+
+    ``NaN`` is excluded from the comparison on purpose, the same way
+    ``check_all_finite`` excludes it: a comparison against ``NaN``
+    (``nan >= 0``) evaluates to ``False`` in pandas/numpy, which would
+    otherwise make a single missing value trip *this* check too and
+    surface as a second, redundant "counts must be non-negative" error
+    alongside the real "missing values" one for the same root cause.
+    ``check_no_missing_values`` is what's responsible for reporting NaN.
     """
     numeric = df.select_dtypes(include=[np.number])
     if numeric.empty:
         return True
-    return bool((numeric >= 0).all().all())
+    return bool((numeric.fillna(0) >= 0).all().all())
 
 
 def check_likely_correct_orientation(df: pd.DataFrame) -> bool:
@@ -202,7 +210,11 @@ def validate_counts(df: pd.DataFrame) -> None:
         gene IDs, duplicate sample column names, negative counts, or a
         combination of these.
     """
-    errors = []
+    # Annotated explicitly as the shared base class -- left as a bare `[]`,
+    # mypy infers the list's element type from whichever specific subclass
+    # gets appended first, then flags every other subclass appended below
+    # as incompatible with that overly narrow inferred type.
+    errors: list[CountMatrixError] = []
 
     # A zero-row or zero-column matrix isn't "valid data with nothing wrong
     # with it" -- every check below passes vacuously on an empty axis (an

@@ -68,4 +68,16 @@ interpreting the results.
         messages=[{"role": "user", "content": prompt}],
     )
 
-    return response.content[0].text
+    # response.content[0] is typed as a union of every possible content
+    # block the API can return (tool use, thinking, etc.) -- only
+    # TextBlock has .text. A plain text-only prompt like this one always
+    # gets a TextBlock back in practice, but asserting it explicitly turns
+    # a hypothetical future API response shape into a clear error naming
+    # the actual block type received, instead of an opaque AttributeError.
+    block = response.content[0]
+    if not isinstance(block, anthropic.types.TextBlock):
+        raise TypeError(
+            f"Expected a text response from the Claude API, got a {type(block).__name__} "
+            "content block instead."
+        )
+    return block.text

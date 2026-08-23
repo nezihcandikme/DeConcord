@@ -4,12 +4,14 @@ import pytest
 
 from deconcord.io.counts import (
     CountMatrixError,
+    MissingValuesError,
     NonFiniteCountsError,
     NonNumericCountsError,
     NonUniqueColumnsError,
     NonUniqueIndexError,
     check_all_finite,
     check_all_integer,
+    check_no_missing_values,
     check_numeric_dtype,
     check_unique_columns,
     check_unique_index,
@@ -45,6 +47,27 @@ def test_validate_counts_non_numeric_column_raises():
 
     with pytest.raises(NonNumericCountsError):
         validate_counts(df)
+
+
+def test_validate_counts_missing_value_raises():
+    # A NaN in an otherwise-real count matrix is one of the most common
+    # real-data problems (a dropout, a merge that didn't line up every
+    # gene) -- pinned down directly rather than only exercised indirectly
+    # through check_no_missing_values.
+    df = pd.DataFrame({"sample_A": [1.0, float("nan"), 3.0], "sample_B": [4.0, 5.0, 6.0]})
+
+    with pytest.raises(MissingValuesError):
+        validate_counts(df)
+
+
+def test_check_no_missing_values_true_for_complete_data():
+    df = pd.DataFrame({"sample_A": [1, 2, 3]})
+    assert check_no_missing_values(df) is True
+
+
+def test_check_no_missing_values_false_with_nan():
+    df = pd.DataFrame({"sample_A": [1.0, float("nan"), 3.0]})
+    assert check_no_missing_values(df) is False
 
 
 def test_validate_counts_infinite_value_raises_specific_error():

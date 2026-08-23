@@ -158,6 +158,22 @@ def test_run_differential_expression_with_covariates_collinear_with_condition_ra
         run_differential_expression_with_covariates(df, group_1, group_2, metadata, ["batch"])
 
 
+def test_run_differential_expression_with_covariates_no_residual_df_raises():
+    # A design matrix that's full column rank (so it passes the
+    # rank-deficient check) but square -- as many parameters as samples --
+    # leaves zero residual degrees of freedom to estimate variance from.
+    # intercept + condition + 2 batch dummies (a 3-level covariate) = 4
+    # parameters, exactly matching 4 samples here, by construction.
+    group_1 = ["s1", "s2"]
+    group_2 = ["s3", "s4"]
+    batch = {"s1": "batch_A", "s2": "batch_B", "s3": "batch_C", "s4": "batch_A"}
+    df = pd.DataFrame({"gene1": {"s1": 12.0, "s2": 13.0, "s3": 15.0, "s4": 11.0}}).T
+    metadata = pd.DataFrame({"batch": batch})
+
+    with pytest.raises(ValueError, match="residual degree of freedom"):
+        run_differential_expression_with_covariates(df, group_1, group_2, metadata, ["batch"], moderated=False)
+
+
 def test_run_differential_expression_with_covariates_moderated_needs_two_genes():
     df, group_1, group_2, metadata = _confounded_batch_dataset()
 

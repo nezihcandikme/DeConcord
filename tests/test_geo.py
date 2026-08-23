@@ -109,6 +109,78 @@ def test_download_geo_supplementary_file_writes_local_file(mock_urlopen, tmp_pat
 
 
 @patch("urllib.request.urlopen")
+def test_download_geo_supplementary_file_network_failure_raises_connection_error(mock_urlopen, tmp_path):
+    # Mirrors test_list_geo_supplementary_files_network_failure_raises_connection_error
+    # above, but for download_geo_supplementary_file's own urlopen call --
+    # a separate try/except around a separate network request, so it needs
+    # its own direct test rather than assuming the sibling function's
+    # coverage carries over.
+    mock_urlopen.side_effect = urllib.error.URLError("timed out")
+
+    with pytest.raises(ConnectionError, match="GEO"):
+        download_geo_supplementary_file("GSE52778", "GSE52778_raw_counts.csv", dest_dir=str(tmp_path))
+
+
+@patch("urllib.request.urlopen")
+def test_fetch_geo_sample_metadata_network_failure_raises_connection_error(mock_urlopen):
+    mock_urlopen.side_effect = urllib.error.URLError("timed out")
+
+    with pytest.raises(ConnectionError, match="GEO"):
+        fetch_geo_sample_metadata("GSE52778")
+
+
+@patch("urllib.request.urlopen")
+def test_fetch_geo_sample_metadata_characteristic_without_colon_uses_fallback_name(mock_urlopen):
+    # Real GEO series usually write "key: value" characteristics lines, but
+    # the format doesn't enforce it -- a submitter can write a bare value
+    # with no colon at all. Falls back to a positional "characteristic_N"
+    # column name instead of crashing on an IndexError/ValueError trying to
+    # split on a colon that isn't there.
+    # No !Sample_title line on purpose: the fallback name is positional
+    # ("characteristic_{len(fields) + 1}"), so an already-populated fields
+    # dict (e.g. from a title column parsed first) would shift the number --
+    # leaving title out keeps the expected name unambiguous.
+    matrix = (
+        '!Sample_geo_accession\t"GSM1"\t"GSM2"\n'
+        '!Sample_characteristics_ch1\t"lung"\t"liver"\n'
+        "!series_matrix_table_begin\n"
+        "some\tunrelated\tdata\n"
+    )
+    mock_urlopen.return_value = _FakeResponse(gzip.compress(matrix.encode("utf-8")))
+
+    metadata = fetch_geo_sample_metadata("GSE52778")
+
+    assert "characteristic_1" in metadata.columns
+    assert metadata.loc["GSM1", "characteristic_1"] == "lung"
+    assert metadata.loc["GSM2", "characteristic_1"] == "liver"
+
+
+@patch("urllib.request.urlopen")
+def test_fetch_geo_sample_metadata_duplicate_characteristic_names_get_suffixed(mock_urlopen):
+    # Two separate !Sample_characteristics_ch1 lines that both happen to
+    # use the same "key:" prefix (a real submitter mistake, e.g. two
+    # differently-scoped "batch: ..." annotations) would otherwise silently
+    # overwrite each other in the fields dict -- the second must be kept
+    # under a suffixed name instead of clobbering the first.
+    matrix = (
+        '!Sample_title\t"sample 1"\t"sample 2"\n'
+        '!Sample_geo_accession\t"GSM1"\t"GSM2"\n'
+        '!Sample_characteristics_ch1\t"batch: A"\t"batch: B"\n'
+        '!Sample_characteristics_ch1\t"batch: X"\t"batch: Y"\n'
+        "!series_matrix_table_begin\n"
+        "some\tunrelated\tdata\n"
+    )
+    mock_urlopen.return_value = _FakeResponse(gzip.compress(matrix.encode("utf-8")))
+
+    metadata = fetch_geo_sample_metadata("GSE52778")
+
+    assert metadata.loc["GSM1", "batch"] == "A"
+    assert metadata.loc["GSM2", "batch"] == "B"
+    assert metadata.loc["GSM1", "batch_2"] == "X"
+    assert metadata.loc["GSM2", "batch_2"] == "Y"
+
+
+@patch("urllib.request.urlopen")
 def test_fetch_geo_sample_metadata_parses_characteristics(mock_urlopen):
     gz_bytes = gzip.compress(_SAMPLE_SERIES_MATRIX.encode("utf-8"))
     mock_urlopen.return_value = _FakeResponse(gz_bytes)

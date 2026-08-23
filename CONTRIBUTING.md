@@ -15,9 +15,9 @@ source .venv/bin/activate  # .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
 ```
 
-`.[dev]` installs `pytest` and `ruff` alongside the package itself. The
-optional AI-summary feature (`explain_results=True`) needs an extra:
-`pip install -e ".[ai]"`.
+`.[dev]` installs `pytest`, `pytest-cov`, `ruff`, and `mypy` alongside the
+package itself. The optional AI-summary feature (`explain_results=True`)
+needs an extra: `pip install -e ".[ai]"`.
 
 ## Running tests
 
@@ -33,6 +33,7 @@ regression test, not just the fix itself.
 
 - `ruff check src/ tests/ benchmarks/ examples/` should report no errors (`ruff check --fix` for
   the auto-fixable ones, mostly import ordering).
+- `mypy src/deconcord --ignore-missing-imports` should report no errors -- CI-gated, alongside ruff.
 - Type hints on public function signatures.
 - Docstrings on public functions: what it does, parameters, returns,
   raises — see any existing function in `src/deconcord/` for the expected
@@ -66,7 +67,8 @@ triggers the problem) makes a fix much faster than a description alone.
 
 1. Fork the repo and create a branch from `main`.
 2. Make your change, with tests.
-3. Run `pytest` and `ruff check src/ tests/ benchmarks/ examples/` locally.
+3. Run `pytest`, `ruff check src/ tests/ benchmarks/ examples/`, and
+   `mypy src/deconcord --ignore-missing-imports` locally.
 4. Open a PR using the template — what changed, why, what tests you ran.
 5. Update `CHANGELOG.md` under `[Unreleased]` if the change is user-facing.
 

@@ -343,7 +343,18 @@ def compute_resampling_stability(
         "resample_method": resample_method,
         "n_iterations": actual_n_iterations,
         "n_baseline_significant": len(baseline_sig_set),
-        "mean_jaccard_to_baseline": float(np.nanmean(jaccards)) if jaccards else float("nan"),
+        # Every iteration's jaccard is NaN when the baseline (and every
+        # resampled rerun) has zero significant genes -- a real outcome for
+        # a very stringent alpha or a genuinely null dataset, not a bug.
+        # np.nanmean on an all-NaN array still returns NaN correctly, but
+        # emits a "Mean of empty slice" RuntimeWarning along the way; that
+        # warning would otherwise leak out to anyone running a real
+        # analysis that legitimately finds nothing significant, so it's
+        # checked for explicitly instead of suppressed blindly.
+        "mean_jaccard_to_baseline": (
+            float("nan") if not jaccards or all(np.isnan(j) for j in jaccards)
+            else float(np.nanmean(jaccards))
+        ),
         "baseline_replication_rate": baseline_replication_rate,
         "mean_direction_stability": mean_direction_stability,
         "mean_rank_stability": mean_rank_stability,

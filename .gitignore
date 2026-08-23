@@ -32,6 +32,9 @@ Thumbs.db
 .env
 *.env.local
 
+# Personal notes, kept local on purpose -- not for the public repo
+/TUTORIAL.md
+
 # Generated analysis output
 /test_*.png
 /deconcord_output/

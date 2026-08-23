@@ -9,6 +9,41 @@ This file is user-facing: what changed and what it means for you. For the
 reasoning behind each decision, including rejected alternatives, see
 [`DEVLOG.md`](DEVLOG.md).
 
+## [0.20.0] — 2026-08-23
+
+### Fixed
+- `check_nonnegative_counts` no longer flags a missing value (`NaN`) as
+  also being a negative count. A single `NaN` used to trip both checks at
+  once (`nan >= 0` evaluates to `False`), producing a confusing combined
+  "missing values" + "counts must be non-negative" error for what was
+  really one problem. `NaN` cells are now excluded from the non-negativity
+  comparison, matching how `check_all_finite` already excludes them from
+  the infinite-value check.
+- `compute_resampling_stability`'s summary no longer emits a spurious
+  `RuntimeWarning: Mean of empty slice` when every iteration (baseline and
+  every resample) finds zero significant genes — a real outcome with a
+  strict `alpha` or a genuinely null dataset. `mean_jaccard_to_baseline`
+  still correctly comes back as `NaN` in that case, just without the
+  warning noise.
+
+### Changed
+- Core dependencies (`pandas`, `numpy`, `scipy`, `statsmodels`,
+  `matplotlib`, `scikit-learn`) now declare minimum versions instead of
+  being unpinned. An unpinned dependency could previously resolve to a
+  years-old, silently incompatible release in an old or frozen
+  environment instead of failing at install time.
+- The package now ships a `py.typed` marker (PEP 561): its type hints are
+  meant to be checked by a downstream caller's own type checker (mypy,
+  pyright), not just read as documentation. Every module now passes
+  `mypy` cleanly, and CI enforces that going forward.
+
+### Added
+- `.[dev]` now also installs `pytest-cov` and `mypy`.
+
+This release is a testing, typing, and packaging hardening pass with no
+new user-facing features — see [`DEVLOG.md`](DEVLOG.md) for the full
+reasoning and what was deliberately left out.
+
 ## [0.19.0] — 2026-08-23
 
 ### Changed

@@ -239,3 +239,16 @@ def test_compute_log_fold_change_empty_group_raises():
     with pytest.raises(ValueError, match="group_2"):
         compute_log_fold_change(df, ["sample1"], [])
 
+
+def test_compute_log_fold_change_empty_group_1_raises():
+    # The group_2 case above only exercises one of the two symmetric empty
+    # checks in _validate_groups -- pinned down separately so group_1's own
+    # check (raised first, before group_2 is even looked at) has direct
+    # coverage rather than being assumed to work because group_2's does.
+    df = pd.DataFrame({
+        "sample1": [10, 5], "sample2": [20, 15],
+    }, index=["gene1", "gene2"])
+
+    with pytest.raises(ValueError, match="group_1"):
+        compute_log_fold_change(df, [], ["sample2"])
+

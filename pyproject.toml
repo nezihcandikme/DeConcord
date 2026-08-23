@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deconcord"
-version = "0.19.0"
+version = "0.20.0"
 description = "Robustness and concordance analysis for RNA-seq differential expression -- given DE result tables from DESeq2, edgeR, or any other tool, computes method concordance (significant-gene overlap, directional and effect-size agreement, concordant/discordant genes). Also ships the RNA-seq pipeline (validation, QC, normalization, exploratory/covariate-adjusted DE, annotation, pathway enrichment, visualization) that generates the DE tables it compares."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -30,13 +30,20 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+# Lower bounds only, no upper bounds: these floors are the oldest release
+# of each library that's actually compatible with the Python 3.9 baseline
+# this package targets (older releases predate that support or lack
+# features the codebase relies on -- e.g. pandas's nullable-friendly numeric
+# dtype handling). Left unpinned above previously, which meant `pip install
+# deconcord` into an old/frozen environment could silently resolve to a
+# years-old release with different behavior instead of failing loudly.
 dependencies = [
-    "pandas",
-    "numpy",
-    "scipy",
-    "statsmodels",
-    "matplotlib",
-    "scikit-learn",
+    "pandas>=1.3",
+    "numpy>=1.21",
+    "scipy>=1.7",
+    "statsmodels>=0.13",
+    "matplotlib>=3.4",
+    "scikit-learn>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -45,7 +52,7 @@ dependencies = [
 # (validation, QC, DE, concordance, enrichment, plotting) only needs the
 # core dependencies above.
 ai = ["anthropic", "python-dotenv"]
-dev = ["pytest", "ruff"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy"]
 
 [project.urls]
 Homepage = "https://nezihcandikme.github.io/DeConcord/"
@@ -60,6 +67,12 @@ deconcord = "deconcord.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["deconcord*"]
+
+[tool.setuptools.package-data]
+# PEP 561 marker: tells type checkers (mypy, pyright) that this package
+# ships its own type hints and they should be read directly rather than
+# ignored or looked up in typeshed. An empty file is the whole spec.
+deconcord = ["py.typed"]
 
 [tool.ruff]
 line-length = 120

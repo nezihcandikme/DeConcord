@@ -82,6 +82,24 @@ def test_leave_one_out_summary():
     assert summary["baseline_replication_rate"] == pytest.approx(float(Fraction(5, 6)))
 
 
+def test_leave_one_out_summary_all_nan_when_no_baseline_significant_genes():
+    # An alpha strict enough that nothing clears it in the baseline run --
+    # the three summary stats that are averages *over* baseline-significant
+    # genes (baseline_replication_rate, mean_direction_stability,
+    # mean_rank_stability) have nothing to average, so they must come back
+    # as NaN rather than crashing on an empty .mean() or silently returning
+    # 0 (which would misleadingly read as "unstable" instead of "undefined").
+    result = compute_resampling_stability(
+        _df(), GROUP_1, GROUP_2, resample_method="leave_one_out", alpha=1e-12,
+    )
+    summary = result["summary"]
+
+    assert summary["n_baseline_significant"] == 0
+    assert np.isnan(summary["baseline_replication_rate"])
+    assert np.isnan(summary["mean_direction_stability"])
+    assert np.isnan(summary["mean_rank_stability"])
+
+
 def test_leave_one_out_needs_at_least_three_samples_per_group():
     df = _df()
     with pytest.raises(ValueError, match="leave_one_out needs at least 3 samples"):
@@ -334,6 +352,22 @@ def test_rank_stability_nan_when_baseline_lfc_missing():
     })
     result = _rank_stability(baseline, iteration_lfc)
     assert np.isnan(result["g3"])
+
+
+def test_rank_stability_nan_when_fewer_than_two_rankable_genes():
+    # rank_stability is a *relative* position among every other gene --
+    # with fewer than 2 genes actually having a baseline value, there's
+    # nothing to rank against, so the whole result is undefined regardless
+    # of what the reruns look like.
+    baseline = pd.Series({"g1": 1.0, "g2": float("nan"), "g3": float("nan")})
+    iteration_lfc = pd.DataFrame({
+        0: {"g1": 1.0, "g2": float("nan"), "g3": float("nan")},
+        1: {"g1": 1.5, "g2": float("nan"), "g3": float("nan")},
+    })
+
+    result = _rank_stability(baseline, iteration_lfc)
+
+    assert result.isna().all()
 
 
 def test_rank_stability_bounded_in_unit_interval():
