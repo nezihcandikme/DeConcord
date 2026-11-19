@@ -59,6 +59,24 @@ def check_no_missing_values(df: pd.DataFrame) -> bool:
     return not df.isna().any().any()
 
 
+def _is_integer_dtype(dtype) -> bool:
+    """
+    True for integer dtypes, using pandas's own dtype checks.
+
+    ``np.issubdtype`` was used here originally, but it raises ``TypeError``
+    on pandas extension dtypes such as the ``StringDtype`` pandas 3 uses by
+    default for text columns -- so a text column crashed validation instead
+    of producing ``NonNumericCountsError``. Booleans are not integers here,
+    matching the old behaviour.
+    """
+    return pd.api.types.is_integer_dtype(dtype) and not pd.api.types.is_bool_dtype(dtype)
+
+
+def _is_numeric_count_dtype(dtype) -> bool:
+    """True for integer or floating-point dtypes (see ``_is_integer_dtype``)."""
+    return _is_integer_dtype(dtype) or pd.api.types.is_float_dtype(dtype)
+
+
 def check_all_integer(df: pd.DataFrame) -> bool:
     """
     True if every column has an integer dtype.
@@ -71,7 +89,7 @@ def check_all_integer(df: pd.DataFrame) -> bool:
     fractional "estimated counts" salmon/kallisto/RSEM produce.
     """
     for dtype in df.dtypes:
-        if not np.issubdtype(dtype, np.integer):
+        if not _is_integer_dtype(dtype):
             return False
 
     return True
@@ -92,7 +110,7 @@ def check_numeric_dtype(df: pd.DataFrame) -> bool:
     instead if a caller genuinely needs to enforce whole-number counts.
     """
     for dtype in df.dtypes:
-        if not (np.issubdtype(dtype, np.integer) or np.issubdtype(dtype, np.floating)):
+        if not _is_numeric_count_dtype(dtype):
             return False
 
     return True
@@ -237,9 +255,7 @@ def validate_counts(df: pd.DataFrame) -> None:
 
     if not check_numeric_dtype(df):
         bad_cols = df.dtypes[
-            ~df.dtypes.apply(
-                lambda dtype: np.issubdtype(dtype, np.integer) or np.issubdtype(dtype, np.floating)
-            )
+            ~df.dtypes.apply(_is_numeric_count_dtype)
         ].index.tolist()
 
         errors.append(NonNumericCountsError(

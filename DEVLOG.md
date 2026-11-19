@@ -643,3 +643,27 @@ Decisions rejected along the way:
 Full pytest suite: 272 to 287 (15 new tests: 3 in `test_cli.py`, 1 each in `test_differential_expression_welch.py` and `test_differential_expression_covariates.py`, 2 in `test_resampling_stability.py`, 3 in `test_counts.py`, 1 in `test_gmt.py`, 4 in `test_geo.py`). Coverage: 96% to 98%, every module now at 100% except `cli.py` (97%, four remaining lines are the live-network/paid-API save paths, the `argv is None` default idiom, and the `__main__` guard) and the two paid-API-only lines noted above. `ruff check src/ tests/ benchmarks/ examples/`: clean. `mypy src/deconcord --ignore-missing-imports`: clean. CLI smoke test against a real fixture: passes.
 
 Version bump: 0.19.0 to 0.20.0.
+
+---
+
+## Nov 19: pandas 3 broke the count-matrix dtype checks; CI runner pinned
+
+Opened a pull request that only touched the website (`docs/`) and CI went red anyway, twice, for two reasons that had nothing to do with the website and everything to do with time passing since the last push in August.
+
+**First failure: the runner, not the code.** The Python 3.9 job died before any test ran: `The version '3.9' with architecture 'x64' was not found for Ubuntu 26.04`. `ubuntu-latest` had moved to 26.04, and `actions/setup-python` has no 3.9 build for it; `fail-fast` then cancelled the other three matrix jobs. Pinned both jobs to `ubuntu-24.04`, which still has 3.9.
+
+**Second failure: a real bug.** With the runner fixed, Python 3.11 failed four tests in `test_counts.py` with `TypeError: Cannot interpret '<StringDtype(storage='python', na_value=nan)>' as a data type`. CI resolves the unpinned `pandas>=1.3` floor to whatever is newest, now pandas 3, and pandas 3 stores text columns in `StringDtype` by default instead of `object`. `check_all_integer`, `check_numeric_dtype` and the bad-column listing inside `validate_counts` all called `np.issubdtype(dtype, ...)`, and numpy can't interpret a pandas extension dtype at all, so it raised instead of returning `False`. The user-facing effect: a count matrix with a stray text column, exactly the input these checks exist to catch, crashed validation with an opaque numpy error instead of producing `NonNumericCountsError`. Reproduced it locally in a fresh environment with pandas 3.1.1 (same four failures) before changing anything.
+
+Replaced the three `np.issubdtype` calls with two small helpers built on `pd.api.types.is_integer_dtype` / `is_float_dtype`, which understand both numpy and pandas extension dtypes. Booleans are explicitly excluded from "integer", because `np.issubdtype(bool, np.integer)` was `False` and that behaviour shouldn't change silently. A side effect, kept on purpose: pandas's nullable `Int64` now counts as an integer dtype (numpy raised on it too).
+
+Added three regression tests that build the dtypes explicitly (`StringDtype` text, plain booleans, nullable `Int64`), so the bug is caught on pandas 2 as well, not only when CI happens to resolve pandas 3. Confirmed two of them fail with the old code on pandas 2.3, and all of them pass with the fix on both pandas 2.3 and 3.1.
+
+Decisions rejected along the way:
+
+- **Pinning `pandas<3`.** Would turn CI green with a one-line change, but it hides a real bug from every user who already has pandas 3 installed, and an upper bound on a core dependency of a library is exactly what the August packaging pass decided against.
+- **Dropping Python 3.9 from the test matrix instead of pinning the runner.** 3.9 is end-of-life, so this will be the right move eventually, but `pyproject.toml` still promises 3.9 support; removing the test while keeping the promise would be worse than either option alone. Left for a deliberate decision.
+- **Converting `StringDtype` columns to `object` before checking.** Treats the symptom in one place; the dtype checks would still crash on any other extension dtype.
+
+Full pytest suite: 287 to 290 (3 new tests in `test_counts.py`), passing on pandas 2.3.3 and 3.1.1. `ruff check src/ tests/ benchmarks/ examples/`: clean. `mypy src/deconcord --ignore-missing-imports`: clean.
+
+Version bump: 0.20.0 to 0.20.1.

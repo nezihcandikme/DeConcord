@@ -12,8 +12,8 @@ authors:
 repository-code: "https://github.com/nezihcandikme/DeConcord"
 url: "https://github.com/nezihcandikme/DeConcord"
 license: MIT
-version: 0.20.0
-date-released: "2026-08-23"
+version: 0.20.1
+date-released: "2026-11-19"
 keywords:
   - rna-seq
   - bioinformatics

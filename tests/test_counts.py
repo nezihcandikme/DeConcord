@@ -103,6 +103,35 @@ def test_check_numeric_dtype_false_for_text():
     assert check_numeric_dtype(df) is False
 
 
+def test_check_numeric_dtype_false_for_pandas_string_dtype():
+    # pandas 3 stores text in StringDtype by default; np.issubdtype used to
+    # raise TypeError on it instead of returning False. Built explicitly here
+    # so the regression is caught on pandas 2 as well.
+    df = pd.DataFrame({"sample_A": pd.array(["a", "b", "c"], dtype="string")})
+
+    assert check_numeric_dtype(df) is False
+    with pytest.raises(NonNumericCountsError):
+        validate_counts(df)
+
+
+def test_check_numeric_dtype_false_for_boolean():
+    # Booleans were never accepted as counts; keep it that way after the
+    # switch from np.issubdtype to pandas's dtype checks.
+    df = pd.DataFrame({"sample_A": [True, False, True]})
+
+    assert check_numeric_dtype(df) is False
+    assert check_all_integer(df) is False
+
+
+def test_check_numeric_dtype_true_for_nullable_integer():
+    # pandas's nullable Int64 is a real integer dtype; np.issubdtype raised
+    # TypeError on it too.
+    df = pd.DataFrame({"sample_A": pd.array([1, 2, 3], dtype="Int64")})
+
+    assert check_numeric_dtype(df) is True
+    assert check_all_integer(df) is True
+
+
 def test_check_all_finite_true_for_normal_values():
     df = pd.DataFrame({"sample_A": [1.0, 2.0, 3.0]})
 

@@ -9,6 +9,20 @@ This file is user-facing: what changed and what it means for you. For the
 reasoning behind each decision, including rejected alternatives, see
 [`DEVLOG.md`](DEVLOG.md).
 
+## [0.20.1] — 2026-11-19
+
+### Fixed
+- `validate_counts`, `check_numeric_dtype` and `check_all_integer` no longer
+  crash with a raw `TypeError` on pandas extension dtypes. With pandas 3,
+  text columns use `StringDtype` by default, so a count matrix containing a
+  text column raised `TypeError: Cannot interpret ... as a data type`
+  instead of the intended `NonNumericCountsError`. Nullable integer columns
+  (`Int64`) are now also recognised as integer counts.
+
+### Changed
+- CI runs on `ubuntu-24.04` instead of `ubuntu-latest`, which no longer
+  provides Python 3.9.
+
 ## [0.20.0] — 2026-08-23
 
 ### Fixed
