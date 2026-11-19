@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DEConcord: concordance and robustness checks for RNA-seq differential expression</title>
-  <meta name="description" content="DEConcord is a Python package that compares RNA-seq differential expression results from different tools, thresholds and sample subsets, and reports which conclusions hold up.">
+  <title>DEConcord: concordance and robustness analysis for RNA-seq differential expression</title>
+  <meta name="description" content="DEConcord: a Python package for concordance and robustness analysis of RNA-seq differential expression results across tools, significance thresholds and sample subsets.">
   <link rel="canonical" href="https://nezihcandikme.github.io/DeConcord/">
   <meta property="og:title" content="DEConcord">
-  <meta property="og:description" content="Do DESeq2, edgeR and limma-voom agree on the same data? A Python package for checking how robust RNA-seq differential expression results are.">
+  <meta property="og:description" content="Concordance and robustness analysis for RNA-seq differential expression results.">
   <meta property="og:url" content="https://nezihcandikme.github.io/DeConcord/">
   <meta property="og:type" content="website">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -31,17 +31,17 @@
   <section class="intro">
     <div class="wrap intro-grid">
       <div>
-        <h1>Concordance and robustness checks for RNA-seq differential expression</h1>
+        <h1>Concordance and robustness analysis for RNA-seq differential expression</h1>
         <p class="lede">
-          DEConcord compares differential expression results from DESeq2, edgeR, limma-voom or
-          any other tool, and tells you which conclusions survive a reasonable change of method,
-          significance cutoff or sample set.
+          DEConcord quantifies agreement between RNA-seq differential expression results obtained
+          with different tools (DESeq2, edgeR, limma-voom), significance thresholds and sample
+          subsets.
         </p>
         <p class="actions">
           <a class="button primary" href="#install">Install</a>
           <a class="button" href="https://github.com/nezihcandikme/DeConcord">Source code</a>
         </p>
-        <p class="meta">Python 3.9+ &nbsp;|&nbsp; MIT licence &nbsp;|&nbsp; works on any table with a gene ID, log fold change and p-value</p>
+        <p class="meta">Python &ge; 3.9 &nbsp;|&nbsp; MIT licence &nbsp;|&nbsp; Input: tables with gene identifier, log<sub>2</sub> fold change and p-value</p>
       </div>
 
       <figure class="chart">
@@ -88,9 +88,9 @@
           </g>
         </svg>
         <figcaption>
-          <span class="key airway"></span> airway (human) &nbsp;
-          <span class="key pasilla"></span> pasilla (fly). Tools agree on most significant
-          genes but not all of them; they never disagreed on direction.
+          <span class="key airway"></span> airway (<i>H. sapiens</i>) &nbsp;
+          <span class="key pasilla"></span> pasilla (<i>D. melanogaster</i>). Jaccard index of
+          significant gene sets for each pair of tools, default settings.
         </figcaption>
       </figure>
     </div>
@@ -99,46 +99,47 @@
   <main class="wrap">
 
     <section id="why">
-      <h2>Why compare tools?</h2>
+      <h2>Overview</h2>
       <p>
-        Most RNA-seq studies report the genes that one tool, run once, called significant.
-        DESeq2, edgeR and limma-voom make different statistical assumptions, and each is a
-        reasonable choice. If a conclusion depends on which one you picked, that is worth knowing
-        before building on it. DEConcord does not replace these tools: it takes their result tables
-        and measures how far they agree.
+        Differential expression results are commonly reported from a single analysis
+        configuration. DESeq2, edgeR and limma-voom are based on different statistical models,
+        and the set of genes called significant can differ between them on identical input.
+        DEConcord takes result tables produced by these tools and reports the extent of agreement
+        between them. It does not perform primary differential expression analysis in place of
+        these tools.
       </p>
     </section>
 
     <section id="checks">
-      <h2>What it checks</h2>
+      <h2>Analyses</h2>
       <div class="checks">
         <div>
           <h3>Method concordance</h3>
-          <p>Overlap of significant genes between two result tables, fold-change correlation, direction agreement, and the exact genes behind every disagreement.</p>
+          <p>Jaccard index of significant gene sets, Pearson and Spearman correlation of log fold changes, directional agreement, and lists of concordant, discordant and method-specific genes.</p>
         </div>
         <div>
           <h3>Threshold sensitivity</h3>
-          <p>The same comparison across a range of significance cutoffs, to find genes that stay significant whatever reasonable cutoff you choose.</p>
+          <p>Concordance metrics evaluated across a range of significance thresholds, identifying genes whose significance does not depend on the threshold chosen.</p>
         </div>
         <div>
           <h3>Pathway stability</h3>
-          <p>Whether a pathway stays enriched when the gene list underneath it comes from a different tool.</p>
+          <p>Overlap of significantly enriched pathways between two enrichment tables derived from different differential expression results.</p>
         </div>
         <div>
           <h3>Resampling stability</h3>
-          <p>Reruns the analysis on subsets of samples (subsampling or leave-one-out) to see whether a gene's call depends on which samples were collected.</p>
+          <p>Differential expression repeated on sample subsets (subsampling or leave-one-out), with per-gene replication rate, direction stability and rank stability.</p>
         </div>
       </div>
     </section>
 
     <section id="results">
-      <h2>Results on public datasets</h2>
+      <h2>Validation on public datasets</h2>
       <p>
-        Each tool was run separately with its own default settings on two public datasets,
+        DESeq2, edgeR and limma-voom were each run with default settings on two public datasets:
         <a href="https://bioconductor.org/packages/release/data/experiment/html/airway.html">airway</a>
         (human airway smooth muscle cells) and
         <a href="https://bioconductor.org/packages/release/data/experiment/html/pasilla.html">pasilla</a>
-        (<i>Drosophila</i>), and every pair of tools was compared.
+        (<i>Drosophila melanogaster</i>). Pairwise concordance is shown below.
       </p>
 
       <div class="table-wrap">
@@ -164,24 +165,26 @@
         </table>
       </div>
       <p class="table-note">
-        Jaccard: share of significant genes two tools have in common (1 = identical lists).
-        Same direction: share of genes significant in both whose fold changes point the same way.
+        Jaccard: size of the intersection of the two significant gene sets divided by the size of
+        their union. Fold-change <i>r</i>: Pearson correlation of log<sub>2</sub> fold changes across all
+        genes tested by both tools. Same direction: proportion of genes significant in both results
+        with log<sub>2</sub> fold changes of the same sign.
       </p>
 
       <div class="callout">
         <p>
-          <strong>Main finding so far.</strong> The tools disagree about <em>which</em> borderline genes
-          clear the significance cutoff, by up to about a quarter of the list. They never disagreed
-          about direction: no gene was significantly up in one tool and significantly down in another.
+          <strong>Summary.</strong> Differences between tools were confined mainly to genes near the
+          significance threshold (Jaccard index 0.718 to 0.951). No gene was called significant by both
+          tools of a pair with opposite direction of effect.
         </p>
       </div>
 
       <p>
-        A stress test on subsets of a third public dataset (Bottomly) pushed the comparison
-        further: increasingly unbalanced groups, a technical covariate, and reads thinned to 25%
-        and 5% of the original depth. Unbalanced groups reduced agreement the most (DESeq2 vs edgeR
-        Jaccard fell from 0.93 to 0.70). Across all 24 comparisons, direction agreement stayed at 100%.
-        Scripts and full tables are in
+        Concordance was further assessed on subsets of the Bottomly dataset under three
+        conditions: unbalanced group sizes, a technical covariate (library size) with and without
+        adjustment, and reduced sequencing depth (25% and 5% of reads). Unbalanced group sizes
+        produced the largest reduction in agreement (DESeq2 vs edgeR Jaccard index 0.930 to 0.704).
+        Directional agreement was 1.000 in all 24 comparisons. Scripts and complete results:
         <a href="https://github.com/nezihcandikme/DeConcord/tree/main/benchmarks">benchmarks/</a>.
       </p>
     </section>
@@ -207,8 +210,8 @@ result = compute_de_concordance(
     lfc_col_a=<span class="str">"log2FoldChange"</span>, pvalue_col_a=<span class="str">"padj"</span>,
     lfc_col_b=<span class="str">"logFC"</span>, pvalue_col_b=<span class="str">"FDR"</span>,
 )
-result[<span class="str">"summary"</span>][<span class="str">"jaccard_index"</span>]     <span class="com"># overlap of significant genes</span>
-result[<span class="str">"discordant_genes"</span>]                <span class="com"># significant in both, opposite direction</span></code></pre>
+result[<span class="str">"summary"</span>][<span class="str">"jaccard_index"</span>]     <span class="com"># Jaccard index of significant genes</span>
+result[<span class="str">"discordant_genes"</span>]                <span class="com"># significant in both, opposite sign</span></code></pre>
 
       <h3>From the command line</h3>
 <pre><code>deconcord concordance deseq2_results.csv edger_results.csv \
@@ -217,35 +220,36 @@ result[<span class="str">"discordant_genes"</span>]                <span class="
     --lfc-col-b logFC --pvalue-col-b FDR \
     --out concordance_output</code></pre>
       <p>
-        Output: <code>summary.json</code>, a merged table with both tools' values for every gene,
-        and separate lists of concordant, discordant and tool-specific genes. A complete
-        runnable example is in
+        Output: <code>summary.json</code>, <code>merged.csv</code> (values from both tables for every
+        compared gene) and separate CSV files for concordant, discordant and method-specific genes.
+        A complete example is provided in
         <a href="https://github.com/nezihcandikme/DeConcord/blob/main/examples/quickstart.py">examples/quickstart.py</a>.
       </p>
       <p>
-        The package also includes a small pipeline for producing result tables in the first place
-        (input validation, sample QC, normalisation, two simple DE tests, pathway enrichment,
-        volcano and PCA plots). It supports the comparisons; it is not meant to compete with
-        DESeq2 or edgeR.
+        The package additionally contains a two-group analysis pipeline (input validation, sample
+        QC, CPM normalisation, Welch and moderated t-tests, hypergeometric pathway enrichment,
+        volcano and PCA plots), used to generate result tables for comparison. It is not intended as
+        a replacement for DESeq2 or edgeR.
       </p>
     </section>
 
     <section id="limitations">
       <h2>Limitations</h2>
       <ul>
-        <li>Results so far come from a few public datasets with simple two-group designs.</li>
-        <li>The built-in pipeline handles two-group comparisons (optionally with covariates) only: no paired samples or designs with more than two conditions.</li>
-        <li>Resampling uses subsampling and leave-one-out, not a true bootstrap.</li>
-        <li>Pathway stability cannot detect when two enrichment tables were built from different gene-set collections.</li>
-        <li>The metrics are standard ones (Jaccard, correlation, direction agreement); no new statistical method is claimed.</li>
+        <li>Validation covers a small number of public datasets with two-group designs.</li>
+        <li>The built-in pipeline supports two-group comparisons, optionally with covariates. Paired designs and designs with more than two conditions are not supported.</li>
+        <li>Resampling stability uses subsampling and leave-one-out; bootstrap resampling is not implemented.</li>
+        <li>Pathway stability does not detect enrichment tables built from different gene-set collections or background sets.</li>
+        <li>All metrics are established measures (Jaccard index, correlation, directional agreement); no new statistical method is proposed.</li>
       </ul>
     </section>
 
     <section id="next">
-      <h2>In progress</h2>
+      <h2>Ongoing work</h2>
       <p>
-        Applying DEConcord to public Alzheimer's disease RNA-seq datasets, to ask which matters more
-        for the final gene list: the choice of tool or the choice of dataset.
+        Evaluation on public Alzheimer's disease RNA-seq datasets, comparing the variation in
+        differential expression results attributable to the choice of tool with that attributable
+        to the choice of dataset.
       </p>
     </section>
 
@@ -264,9 +268,9 @@ result[<span class="str">"discordant_genes"</span>]                <span class="
       <div>
         <h2>About</h2>
         <p>
-          Developed by <a href="https://nezihcandikme.github.io">Nezih Can Dikme</a>, with help from
-          AI coding tools. Every number on this page comes from scripts in the repository that anyone
-          can rerun. Released under the MIT licence.
+          Author: <a href="https://nezihcandikme.github.io">Nezih Can Dikme</a>. Developed with the
+          assistance of AI coding tools. All reported values are reproducible from scripts in the
+          repository. Licence: MIT.
         </p>
       </div>
     </div>
